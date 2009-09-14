@@ -1,0 +1,281 @@
+PLAN(4)                                                                PLAN(4)
+
+
+
+NAME
+       ~/.dayplan - database file of plan(1)
+
+SYNOPSIS
+DESCRIPTION
+       The ~/.dayplan file is read and written by the plan and pland programs.
+       It can be edited manually, but it has not been designed for this.  Gen‐
+       erally,  the format is annoyingly unmnemonic, and there is virtually no
+       error checking. Use at your own risk. The only  reason  I  didn’t  make
+       this a binary file is that I dislike binary config files as a matter of
+       principle.
+
+       The type of every line depends on the first character of the line.  The
+       second  character is always a single TAB character. All following char‐
+       acters are arguments. Comments and blank lines (which are ignored)  can
+       appear  anywhere.  "Header  types" are all at the beginning of the file
+       before the first "entry type".
+
+       TYPES THAT CAN APPEAR ANYWHERE:
+
+       #      Comment line. The rest of the line is ignored.
+
+
+       HEADER TYPES:
+
+       o      Options. The argument consists of 14  consecutive  flag  charac‐
+              ters, and five numerical arguments.  In order, the flags are:
+
+              s      sunday first
+
+              a      12-hour (am/pm) mode
+
+              m      US date format mm/dd/yy
+
+              d      auto-delete past options
+
+              j      show julian dates
+
+              w      show week numbers
+
+              n      show the next three notes, rather than the first three
+
+              -      always  a  minus sign, not used (used to be warning popup
+                     mode)
+
+              w      show advance warnings graphically in week view
+
+              u      show file names next to note strings in week view
+
+              b      show appointments without time as full-width bar in  week
+                     views
+
+              -      if  "w",  the first week of the year is the one with full
+                     seven days; if "t", the  first  Thursday  controls  which
+                     week is the first; otherwise, any partial week is first
+
+              c      use  group  color of other file appointments as the back‐
+                     ground color for the text of these  appointments  in  the
+                     day boxes in the month view
+
+              o      turn  the  own-only flag in appointment entry menus on by
+                     default,  and  only  show  appointments  from  the   main
+                     ~/.dayplan file.
+
+              After the flags, there is a sequence of integers:
+
+              -      default early warning time in seconds
+
+              -      default late warning time in seconds
+
+              -      expiration  time  of notifier windows in seconds; 0 means
+                     notifiers never expire
+
+              -      beginning hour of week views, default is 8 (8:00 o’clock)
+
+              -      ending hour of week views, default is 20 (20:00 o’clock)
+
+              -      the  number  of  days  displayed  in  a week view, 1..28,
+                     default is 7
+
+       O      More options. The argument consists of 24 consecutive flag char‐
+              acters,  most  of  which are unused and reserved for future use.
+              ’-’ means an option is off, everything else means the option  is
+              on. In order, the flags are:
+
+              s      use the main window for all views
+
+              a      resize windows if the contents change
+
+       t      Time  adjustment  parameters  as  defined  with  the Adjust Time
+              popup. The five numeric parameters are the offset to the  system
+              clock  in  seconds, the timezone offset in seconds, the DST flag
+              (0=always on, 1=always off, 2=automatic), and the  Julian  begin
+              and end dates for automatic DST.
+
+       e      Early warning flags,
+
+       l      Late warning flags, and
+
+       a      alarm flags:
+              These three have the same format. The first three argument chars
+              are flags, as specified in the Alarm Options  popup.  ’-’  means
+              the flag is off, everything else means the flag is on. In order,
+              the flags are:
+
+              w      show a color-coded window when the warning/alarm triggers
+
+              m      send mail when the warning/alarm triggers
+
+              x      execute a command when the warning/alarm triggers
+
+              The  flags  are followed by a single blank. The rest of the line
+              is the command to execute when the  warning/alarm  triggers  and
+              the ’x’ flag is on.
+
+       y      Year  overview options. There are 10 consecutive flag characters
+              and three numerical  arguments.   Only  one  flag  is  currently
+              defined:
+
+              s      show  single-day  appointments  too (those with a repeat-
+                     every count of 1)
+
+              -      nine unused flags that must be present, all ’-’
+
+              After the flags, there is a sequence of integers:
+
+              -      the number of months (zoom factor) that fills one screen‐
+                     ful
+
+              -      The display mode is 0 for the default files as defined in
+                     the file list menu, 1 for all files, 2 for  own  appoint‐
+                     ments  only,  and 2 for the file defined by the following
+                     number.
+
+              -      the number of the file whose appointments  are  displayed
+                     if the previous number is 3.
+
+       P      The  PostScript  printing options. Ten flag characters, followed
+              by a blank and the print mode:
+
+              a      omit all appointments from the printout
+
+              p      omit all private appointments from the printout
+
+              -      eight unused flags that must be present, all ’-’
+
+              -      the mode: 0 for month, 1 for year, 2 for landscape  week,
+                     and 3 for portrait week
+
+       p      The  print spooling string. When printing a PostScript calendar,
+              the PostScript code is sent to stdin of this command.
+
+       m      The mailer program, as specified in the Alarm Options  menu.  Up
+              to  one  "%s"  is  allowed,  it is replaced by the (quoted) note
+              string.  "%s" is typically used for a subject.
+
+       U      This code is obsolete since version 1.5.
+
+       u      One file in the file list. There are five arguments  (the  order
+              is  strange  because the month flag has been added later in ver‐
+              sion 1.4):
+
+              -      the file (login) name
+
+              -      the file path
+
+              -      0 if the file is shown in week views, 1 if  the  file  is
+                     suspended
+
+              -      the  color  used  in the week view, a number in the range
+                     0..7
+
+              -      0 if the file is shown in month views, 1 if the  file  is
+                     suspended
+
+              -      0  if  appointments  from this file are silent, 1 if they
+                     can trigger their alarms
+
+
+       ENTRY TYPES:
+
+       [0-9]  Begins an entry. This is the only  mandatory  line,  all  others
+              that  follow are optional. All following lines that do not begin
+              with a numeric digit are extra information for the entry. Unlike
+              all other types, there is no TAB character in the second column,
+              the first character is the first digit of the trigger date.
+
+              The line consists of five  date/time  fields,  seperated  by  at
+              least one blank, and three flag characters that must be consecu‐
+              tive. As usual, flags are off if the character is  ’-’,  and  on
+              otherwise. The fields are:
+
+              1/2/3    trigger   date,  month/day/year.  Year  can  be  either
+                       70..99,00..38,   or   1970..2038.    Do    not    enter
+                       appointments  after  2037. If there is demand, I’ll fix
+                       this bug in about 50 years.
+
+              1:2:3    trigger time, hour:minutes:seconds, in 24-hour  format.
+                       99:99:99  means that there is no alarm time ("-" in the
+                       time column).
+
+              1:2:3    length, hour:minutes:seconds, in 24-hour format
+
+              1:2:3    early-warning time,  hour:minutes:seconds,  in  24-hour
+                       format, 0:0:0 means there is no early warning
+
+              1:2:3    late-warning  time,  hour:minutes:seconds,  in  24-hour
+                       format, 0:0:0 means there is no late warning
+
+              S        suspended (the green button at the left edge is off)
+
+              P        private (goes into the private dayplan  file  that  has
+                       mode 0600)
+
+              N        no  alarm  (trigger  warnings  if nonzero, but no final
+                       alarm)
+
+              M        do not show this appointment in the month view
+
+              Y        do not show this appointment in the year view
+
+              W        do not show this appointment in the week view
+
+              O        do not show this appointment in the year overview
+
+              D        do not show this appointment in the day view
+
+              t        this is an active todo item, move to today  if  in  the
+                       past
+
+              -        one unused flag, always ’-’
+
+              0        appointment text color in month calendar: 0 is default,
+                       1..8 are colors
+
+              0        show a warning this  many  days  in  advance:  0  means
+                       never, 1 means one day ahead, etc.
+
+       E      Add  an  exception date to the appointment. After the ’E’, a tab
+              and a date m/d/y on which the appointment will not trigger  fol‐
+              low. There can be up to four ’E’ lines for each appointment (see
+              NEXC in conf.h).
+
+       R      Add repetition information to the current entry. There are  five
+              numeric  fields,  separated  by  at least one blank. This one is
+              particularly unsuited for human consumption, sorry.
+
+              1      trigger alarm every <1> days (in seconds)
+
+              2      delete  alarm  after  this  date  (seconds  since  1/1/70
+                     0:00:00)
+
+              3      weekday bitmap and nth-week bitmap:
+                     bit0=sunday ... bit6=saturday
+                     bit8=first ... bit12=fifth, bit13=last
+
+              4      month  day  bitmap,  bit0=last  day  of  the  month, bits
+                     1..31=on that day of the month
+
+              5      if 1, the entry repeats every year; if 0, it doesn’t.
+
+       N      Add a note string to the current entry. All characters that fol‐
+              low the TAB are part of the note string.
+
+       M      Add  another line to the current entry’s message. All characters
+              that follow the TAB are part of the line. There can be  multiple
+              M lines, they all add to the message.
+
+       S      Add  another  line to the current entry’s script. All characters
+              that follow the TAB are part of the line. There can be  multiple
+              S lines, they all add to the script.
+
+       G      Reserved for group meetings, not currently used.
+
+
+
+                                                                       PLAN(4)
