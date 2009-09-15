@@ -90,7 +90,6 @@ class dayplan(object):
             # we have a trigger time, and will use it for the end time until something better comes along
             dt_start = datetime.datetime.strptime('%s %s' % (dt.group('date'), time),'%m/%d/%Y %H:%M:%S')
             vevent.add('dtstart').value = dt_start
-            dt_end = (dt_start if not dt_end else dt_end)
             vevent.add('transp').value = 'OPAQUE'
         description = []
         rrule_set = None
@@ -150,10 +149,10 @@ class dayplan(object):
                             rrlist.append('FREQ=WEEKLY')
                             if days:
                                 rrlist.append('BYDAY=%s' % ','.join(days))
-                            
                     else:
                         rrlist.append('FREQ=DAILY')
                     rrule_set.rrule(rrulestr(';'.join(rrlist)))
+#                    print rrule_set
             elif line[0] == 'E':
                 m = exception_rx.match(line)
                 if m:
@@ -166,10 +165,12 @@ class dayplan(object):
                 continue
             else:
                 m = duration_rx.match(line)
-                if m:
+                if m and not dt_end:
                     dt_end = dt_start + datetime.timedelta(hours=int(m.group('hours')),minutes=int(m.group('minutes')),seconds=int(m.group('seconds')))
         if dt_end:
             vevent.add('dtend').value = dt_end
+        else:
+            vevent.add('dtend').value = dt_start            
         if description:
             vevent.add('description').value = ' '.join(description)
         if rrule_set:

@@ -5,7 +5,7 @@
 from nose import with_setup
 from nose.tools import assert_equals
 
-from netplan2ics import dayplan
+from plan2ics import dayplan
 from StringIO import StringIO
 import datetime
 import re
@@ -122,18 +122,30 @@ N    Weekly event. Tuesday at 4pm
 def dtend_test():
     plan = """
 7/21/2009  16:0:0  0:0:0  0:0:0  0:0:0  ---------- 0 0
-N    Weekly event. Tuesday at 4pm
+N    Event at 4pm
     """
     fhandle = StringIO(plan)
     p = dayplan(fhandle)
     print p.pprint()
+    assert_equals(p.calendar.vevent.dtstart.value,datetime.datetime(2009, 7, 21, 16, 0))
     assert_equals(p.calendar.vevent.dtend.value,datetime.datetime(2009, 7, 21, 16, 0))
 def duration_test():
     plan = """
 7/21/2009  16:0:0  1:30:0  0:0:0  0:0:0  ---------- 0 0
-N    Weekly event. Tuesday at 4pm for 1hr 30min
+N    Event at 4pm for 1hr 30min
     """
     fhandle = StringIO(plan)
     p = dayplan(fhandle)
     print p.pprint()
+    assert_equals(p.calendar.vevent.dtstart.value,datetime.datetime(2009, 7, 21, 16, 0))
     assert_equals(p.calendar.vevent.dtend.value,datetime.datetime(2009, 7, 21, 17, 30))
+def allday_test():
+    plan = """
+7/21/2009  99:99:99  0:0:0  0:0:0  0:0:0  ---------- 0 0
+N    All day event
+    """
+    fhandle = StringIO(plan)
+    p = dayplan(fhandle)
+    print p.pprint()
+    assert_equals(p.calendar.vevent.dtstart.value,datetime.date(2009, 7, 21))
+    assert_equals(p.calendar.vevent.dtend.value,datetime.date(2009, 7, 22))
