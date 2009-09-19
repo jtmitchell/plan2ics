@@ -78,6 +78,7 @@ class dayplan(object):
         dt = datetime_rx.match(event[0])
         dt_start = None
         dt_end = None
+        dt_until = None
         time = dt.group('time')
         if time == '99:99:99':
             # there is no alarm trigger time
@@ -112,8 +113,8 @@ class dayplan(object):
                     if not rrule_set:
                         rrule_set = rruleset()
                     if not m.group('delete_secs') == '0':
-                        dt_end = epoch + datetime.timedelta(seconds=int(m.group('delete_secs')))
-                        rrlist.append('UNTIL=%s' % dt_end)
+                        dt_until = epoch + datetime.timedelta(seconds=int(m.group('delete_secs')))
+                        rrlist.append('UNTIL=%s' % dt_until)
                     if not m.group('trigger_secs') == '0':
                         repeat_days = int(m.group('trigger_secs')) / 86400
                         rrlist.append('INTERVAL=%s' % repeat_days)
@@ -165,8 +166,10 @@ class dayplan(object):
                 continue
             else:
                 m = duration_rx.match(line)
-                if m and not dt_end:
-                    dt_end = dt_start + datetime.timedelta(hours=int(m.group('hours')),minutes=int(m.group('minutes')),seconds=int(m.group('seconds')))
+                if m:
+                    duration = datetime.timedelta(hours=int(m.group('hours')),minutes=int(m.group('minutes')),seconds=int(m.group('seconds')))
+                    if duration:
+                        dt_end = dt_start + duration
         if dt_end:
             vevent.add('dtend').value = dt_end
         else:

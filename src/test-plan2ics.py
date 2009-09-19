@@ -149,3 +149,27 @@ N    All day event
     print p.pprint()
     assert_equals(p.calendar.vevent.dtstart.value,datetime.date(2009, 7, 21))
     assert_equals(p.calendar.vevent.dtend.value,datetime.date(2009, 7, 22))
+def yearly_allday_test():
+    plan = """
+7/21/2009  99:99:99  0:0:0  0:0:0  0:0:0  ---------- 0 0
+R    0 0 0 0 1
+N    All day event, repeat yearly
+    """
+    fhandle = StringIO(plan)
+    p = dayplan(fhandle)
+    print p.pprint()
+    assert_equals(p.calendar.vevent.dtstart.value,datetime.date(2009, 7, 21))
+    assert_equals(p.calendar.vevent.dtend.value,datetime.date(2009, 7, 22))
+    assert_equals(p.calendar.vevent.rrule.value,'FREQ=YEARLY')
+def duration_and_until_test():
+    plan = """
+2/14/2009  8:30:0  2:0:0  0:0:0  0:0:0  ---------- 0 0
+R    0 1238198400 64 0 0
+N    Weekly event on Saturday, duration is 2hrs, until 2009/03/28
+    """
+    fhandle = StringIO(plan)
+    p = dayplan(fhandle)
+    print p.pprint()
+    assert_equals(p.calendar.vevent.dtstart.value,datetime.datetime(2009, 2, 14, 8, 30))
+    assert_equals(p.calendar.vevent.dtend.value,datetime.datetime(2009, 2, 14, 10, 30))
+    assert re.search('UNTIL=20090328',p.calendar.vevent.rrule.value)
