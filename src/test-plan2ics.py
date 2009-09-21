@@ -173,3 +173,16 @@ N    Weekly event on Saturday, duration is 2hrs, until 2009/03/28
     assert_equals(p.calendar.vevent.dtstart.value,datetime.datetime(2009, 2, 14, 8, 30))
     assert_equals(p.calendar.vevent.dtend.value,datetime.datetime(2009, 2, 14, 10, 30))
     assert re.search('UNTIL=20090328',p.calendar.vevent.rrule.value)
+def ensure_unicode_test():
+    # because the Ligthning/Sunbird calendar objects otherwise
+    plan = """
+2/14/2009  8:30:0  2:0:0  0:0:0  0:0:0  ---------- 0 0
+R    0 1238198400 64 0 0
+N    Weekly event on Saturday, duration is 2hrs, until 2009/03/28
+    """
+    fhandle = StringIO(plan)
+    p = dayplan(fhandle)
+    print p.pprint()
+    o = p.pprint()
+    assert isinstance(o,unicode)
+    

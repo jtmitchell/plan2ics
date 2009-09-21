@@ -180,7 +180,7 @@ class dayplan(object):
             vevent.rruleset = rrule_set
 
     def pprint(self):
-        return self.calendar.serialize()
+        return unicode(self.calendar.serialize(),'utf-8')
     
 def main():
     for file in sys.argv[1:]:
