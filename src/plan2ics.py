@@ -29,6 +29,7 @@ import sys, re
 import vobject
 import datetime
 from dateutil.rrule import rruleset, rrulestr
+from string import maketrans
 
 datetime_rx = re.compile(r'(?P<date>\d+/\d+/\d+)\s+(?P<time>\d+:\d+:\d+)')
 duration_rx = re.compile(r'\s+(?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d+)')
@@ -58,6 +59,7 @@ weeknumber = (
     '-1',
     )
 one_day = datetime.timedelta(days=1)
+translate_map = maketrans('\xa0',' ')
 
 class dayplan(object):
     calendar = None
@@ -180,7 +182,7 @@ class dayplan(object):
             vevent.rruleset = rrule_set
 
     def pprint(self):
-        return unicode(self.calendar.serialize(),'utf-8')
+        return unicode(self.calendar.serialize().translate(translate_map),'utf-8')
     
 def main():
     for file in sys.argv[1:]:

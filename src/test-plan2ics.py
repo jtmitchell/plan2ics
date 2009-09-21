@@ -185,4 +185,14 @@ N    Weekly event on Saturday, duration is 2hrs, until 2009/03/28
     print p.pprint()
     o = p.pprint()
     assert isinstance(o,unicode)
-    
+def translate_chars_test():
+    plan = """
+2/14/2009  8:30:0  2:0:0  0:0:0  0:0:0  ---------- 0 0
+R    0 1238198400 64 0 0
+N    this event has an 0xa0 char that kills unicode \xa0
+    """
+    fhandle = StringIO(plan)
+    p = dayplan(fhandle)
+    print p.pprint()
+    o = p.pprint()
+    assert isinstance(o,unicode)    
