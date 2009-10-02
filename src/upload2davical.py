@@ -25,6 +25,7 @@ import tempfile
 import urllib, urllib2
 import MultipartPostHandler
 import optparse
+import datetime
 from BeautifulSoup import BeautifulSoup
 
 # class to make required parameters
@@ -36,7 +37,10 @@ class OptionParser (optparse.OptionParser):
         # Assumes the option's 'default' is set to None!
         if getattr(self.values, option.dest) is None:
             self.error("%s option not supplied" % option)
- 
+
+def log(msg,verbose=True): 
+    if verbose:
+        print msg
 
 def submit_ics(url,ical,name,id):
     data = {'path_ics':name, 'ics_file':ical, 'user_no':id, 'submit':'Update'}
@@ -44,7 +48,6 @@ def submit_ics(url,ical,name,id):
 def login_ics(url,user,passwd):
     # assuming the site expects 'user' and 'pass' as query params
     login_form = urllib.urlencode( { 'username': user, 'password': passwd } )
-    
     # perform login with params
     f = urllib2.urlopen(url,login_form )
     f.read()
@@ -53,10 +56,22 @@ def get_userUrl(url):
     soup = BeautifulSoup(urllib2.urlopen(url))
     href = soup.find(text='My Details').parent['href']
     return (href,href.split('=')[1])
-
+def get_lastModified(url,calendar):
+    soup = BeautifulSoup(urllib2.urlopen(url))
+    row = soup.find(text=calendar).parent.parent.parent
+    return datetime.datetime.strptime(row.findAll('td')[3].contents[0].split('.')[0],'%Y-%m-%d %H:%M:%S')
+def get_fileModified(file):
+    epoch = datetime.datetime(1970,1,1)
+    statinfo = os.stat(file)
+    return epoch + datetime.timedelta(seconds=statinfo.st_mtime)
+    
 def main():
     usage="usage: %prog [options] calendar [calendar2 calendar3...]"
     optparser = OptionParser(usage=usage)
+    optparser.add_option('-v','--verbose',dest='verbose',
+        action="store_true",
+        default=False,
+        help='print info while running [default: %default]')        
     optparser.add_option('-u','--username',dest='username',
         default=None,
         help='username for the DaviCal server')
@@ -80,9 +95,17 @@ def main():
     (userUrl, userId) = get_userUrl(top_level_url + '/users.php')
     editUrl=top_level_url + userUrl +'&edit=1'
 
+    log('Logged into server %s. User is %s, Id is %s' %(opts.server,opts.username,userId),verbose=opts.verbose)
+
     for file in args:
-        calendar = dayplan(file)
         cal_name = splitext(basename(file))[0]
+        cal_modified = get_lastModified(top_level_url + userUrl, '/'+opts.username+'/'+cal_name+'/')
+        file_modified = get_fileModified(file)
+        if file_modified <= cal_modified:   # skip the update if davical was updated more recently than the file
+            log('Skipping file %s based on modifications times. File: %s  DaviCal: %s' %(file,file_modified,cal_modified),verbose=opts.verbose)
+            continue
+        log('Processing file %s' %(file),verbose=opts.verbose)
+        calendar = dayplan(file)
 
         temp = tempfile.mkstemp(suffix=".html")
         os.write(temp[0], calendar.pprint())
