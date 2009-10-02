@@ -25,6 +25,7 @@ import tempfile
 import urllib, urllib2
 import MultipartPostHandler
 import optparse
+from BeautifulSoup import BeautifulSoup
 
 # class to make required parameters
 # from optparse examples/required_1.py
@@ -38,18 +39,27 @@ class OptionParser (optparse.OptionParser):
  
 
 def submit_ics(url,ical,name,id):
-    data = {'path_ics':name, 'ics_file':ical, 'user_no':str(id), 'submit':'Update'}
+    data = {'path_ics':name, 'ics_file':ical, 'user_no':id, 'submit':'Update'}
     urllib2.urlopen(url, data).read()
+def login_ics(url,user,passwd):
+    # assuming the site expects 'user' and 'pass' as query params
+    login_form = urllib.urlencode( { 'username': user, 'password': passwd } )
     
+    # perform login with params
+    f = urllib2.urlopen(url,login_form )
+    f.read()
+    f.close()
+def get_userUrl(url):
+    soup = BeautifulSoup(urllib2.urlopen(url))
+    href = soup.find(text='My Details').parent['href']
+    return (href,href.split('=')[1])
+
 def main():
     usage="usage: %prog [options] calendar [calendar2 calendar3...]"
     optparser = OptionParser(usage=usage)
     optparser.add_option('-u','--username',dest='username',
         default=None,
         help='username for the DaviCal server')
-    optparser.add_option('-i','--userid',dest='userid',
-        default=None, type='int',
-        help='user ID for the DaviCal server')
     optparser.add_option('-p','--password',dest='password',
         default=None,
         help='password for the DaviCal server')
@@ -59,30 +69,24 @@ def main():
 
     (opts,args) = optparser.parse_args()
     optparser.check_required('-u')
-    optparser.check_required('-i')
     optparser.check_required('-p')
     top_level_url = "http://" + opts.server
-    url=top_level_url + '/usr.php?user_no='+str(opts.userid)+'&edit=1'
 
     # build opener with HTTPCookieProcessor
     opener = urllib2.build_opener( urllib2.HTTPCookieProcessor(), MultipartPostHandler.MultipartPostHandler )
     urllib2.install_opener( opener )
-    
-    # assuming the site expects 'user' and 'pass' as query params
-    login_form = urllib.urlencode( { 'username': opts.username, 'password': opts.password } )
-    
-    # perform login with params
-    f = opener.open( top_level_url + '/index.php',  login_form )
-    f.read()
-    f.close()
-    
+
+    login_ics(top_level_url + '/index.php', opts.username, opts.password)
+    (userUrl, userId) = get_userUrl(top_level_url + '/users.php')
+    editUrl=top_level_url + userUrl +'&edit=1'
+
     for file in args:
         calendar = dayplan(file)
         cal_name = splitext(basename(file))[0]
 
         temp = tempfile.mkstemp(suffix=".html")
         os.write(temp[0], calendar.pprint())
-        submit_ics(url,open(temp[1], "rb"),cal_name,opts.userid)
+        submit_ics(editUrl,open(temp[1], "rb"),cal_name,userId)
         os.remove(temp[1])
 
 if __name__ == '__main__':
