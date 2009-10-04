@@ -26,6 +26,7 @@ import urllib, urllib2
 import MultipartPostHandler
 import optparse
 import datetime
+import pytz
 from BeautifulSoup import BeautifulSoup
 
 # class to make required parameters
@@ -58,12 +59,18 @@ def get_userUrl(url):
     return (href,href.split('=')[1])
 def get_lastModified(url,calendar):
     soup = BeautifulSoup(urllib2.urlopen(url))
-    row = soup.find(text=calendar).parent.parent.parent
-    return datetime.datetime.strptime(row.findAll('td')[3].contents[0].split('.')[0],'%Y-%m-%d %H:%M:%S')
+    try:
+        row = soup.find(text=calendar).parent.parent.parent
+    except:
+        return None
+    date = datetime.datetime.strptime(row.findAll('td')[3].contents[0].split('.')[0],'%Y-%m-%d %H:%M:%S')
+    #TODO the split() above is throwing away the TZ info, Should grab this and use it properly...
+    return date.replace(tzinfo=None)
 def get_fileModified(file):
-    epoch = datetime.datetime(1970,1,1)
+    epoch = datetime.datetime(1970,1,1,tzinfo=pytz.timezone('UTC'))
     statinfo = os.stat(file)
-    return epoch + datetime.timedelta(seconds=statinfo.st_mtime)
+    date = epoch + datetime.timedelta(seconds=statinfo.st_mtime)
+    return date.astimezone(TZ).replace(tzinfo=None)
     
 def main():
     usage="usage: %prog [options] calendar [calendar2 calendar3...]"
@@ -81,11 +88,21 @@ def main():
     optparser.add_option('-s','--server',dest='server',
         default='localhost',
         help='name of the DaviCal server [default: %default]')
+    optparser.add_option('-f','--force',dest='force',
+        action="store_true",
+        default=False,
+        help='force the upload')
+    optparser.add_option('-z','--timezone',dest='tz',
+        default='Pacific/Auckland',
+        help='set the timezone [default: %default]')
 
     (opts,args) = optparser.parse_args()
     optparser.check_required('-u')
     optparser.check_required('-p')
     top_level_url = "http://" + opts.server
+
+    global TZ
+    TZ=pytz.timezone(opts.tz)
 
     # build opener with HTTPCookieProcessor
     opener = urllib2.build_opener( urllib2.HTTPCookieProcessor(), MultipartPostHandler.MultipartPostHandler )
@@ -101,7 +118,7 @@ def main():
         cal_name = splitext(basename(file))[0]
         cal_modified = get_lastModified(top_level_url + userUrl, '/'+opts.username+'/'+cal_name+'/')
         file_modified = get_fileModified(file)
-        if file_modified <= cal_modified:   # skip the update if davical was updated more recently than the file
+        if (not opts.force) and (cal_modified != None) and (file_modified <= cal_modified):   # skip the update if davical was updated more recently than the file
             log('Skipping file %s based on modifications times. File: %s  DaviCal: %s' %(file,file_modified,cal_modified),verbose=opts.verbose)
             continue
         log('Processing file %s' %(file),verbose=opts.verbose)
