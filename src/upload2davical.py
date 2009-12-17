@@ -23,6 +23,7 @@ import os
 from os.path import basename,splitext
 import tempfile
 import urllib, urllib2
+import socket
 import MultipartPostHandler
 import optparse
 import datetime
@@ -104,6 +105,9 @@ def main():
     global TZ
     TZ=pytz.timezone(opts.tz)
 
+    # set a really long socket timeout in seconds
+    socket.setdefaulttimeout(None)
+    
     # build opener with HTTPCookieProcessor
     opener = urllib2.build_opener( urllib2.HTTPCookieProcessor(), MultipartPostHandler.MultipartPostHandler )
     urllib2.install_opener( opener )
