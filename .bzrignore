@@ -1,2 +1,6 @@
 src/plan2vcs
 src/plan2vcs
+sample/
+.project
+.pydevproject
+.settings

@@ -31,6 +31,8 @@ import datetime
 from dateutil.rrule import rruleset, rrulestr
 from string import maketrans
 
+import PyICU
+
 datetime_rx = re.compile(r'(?P<date>\d+/\d+/\d+)\s+(?P<time>\d+:\d+:\d+)')
 duration_rx = re.compile(r'\s+(?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d+)')
 exception_rx = re.compile(r'E\s+(?P<date>\d+/\d+/\d+)')
@@ -63,10 +65,20 @@ translate_map = maketrans('\xa0',' ')
 
 class dayplan(object):
     calendar = None
+    timezone = None
     def __init__(self,input=None):
         self.calendar = vobject.iCalendar()
+        self.timezone = PyICU.ICUtzinfo.default
+        tz = self.calendar.add('vtimezone')
+        tz.settzinfo(self.timezone)
         if input:
             self._load(input)
+
+    def _escape(self,html):
+        """Returns the given HTML with ampersands, quotes and carets encoded."""
+        html = "".join([x for x in html if ord(x) < 128])
+#        return html.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+        return html
 
     def _load(self,fh):
         if isinstance(fh,str):
@@ -92,6 +104,7 @@ class dayplan(object):
         else:
             # we have a trigger time, and will use it for the end time until something better comes along
             dt_start = datetime.datetime.strptime('%s %s' % (dt.group('date'), time),'%m/%d/%Y %H:%M:%S')
+            dt_start.replace(tzinfo = self.timezone)
             vevent.add('dtstart').value = dt_start
             vevent.add('transp').value = 'OPAQUE'
         description = []
@@ -102,11 +115,11 @@ class dayplan(object):
             if line[0] == 'N':
                 m = note_rx.match(line)
                 if m:
-                    vevent.add('summary').value = m.group('message')
+                    vevent.add('summary').value = self._escape(m.group('message'))
             elif line[0] == 'M':
                 m = message_rx.match(line)
                 if m:
-                    description.append(m.group('message'))
+                    description.append(self._escape(m.group('message')))
             elif line[0] == 'R':
                 m = repeat_rx.match(line)
                 if m:
