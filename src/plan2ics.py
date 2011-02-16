@@ -30,6 +30,7 @@ import vobject
 import datetime
 from dateutil.rrule import rruleset, rrulestr
 from string import maketrans
+import icalendar
 
 import PyICU
 
