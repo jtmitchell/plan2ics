@@ -10,6 +10,9 @@
 #    - the dateutil website
 #
 #    Copyright (c) 2009, James Mitchell
+#
+#    2011-03-05: Replaced vobject with icalendar module, because it seems
+#      clearer what I need to do to create *THEN* add an event.
 #    
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -26,12 +29,12 @@
 
 
 import sys, re
-import vobject
 import datetime
 from dateutil.rrule import rruleset, rrulestr
 from string import maketrans
-import icalendar
-
+import optparse
+from icalendar import Calendar, Event, vRecur, vDate
+import uuid
 import PyICU
 
 datetime_rx = re.compile(r'(?P<date>\d+/\d+/\d+)\s+(?P<time>\d+:\d+:\d+)')
@@ -64,14 +67,22 @@ weeknumber = (
 one_day = datetime.timedelta(days=1)
 translate_map = maketrans('\xa0',' ')
 
+def uid():
+    return uuid.uuid1()
+
 class dayplan(object):
     calendar = None
     timezone = None
-    def __init__(self,input=None):
-        self.calendar = vobject.iCalendar()
+    def __init__(self,input=None,date_threshold=None):
+        """ We expect a file name to open and read, and an optional datetime.timedelta value.
+        The timedelta is used to exclude old events.
+        """
+        self.calendar = Calendar()
+        self.calendar.add('prodid', '-//maungawhau.net.nz//NONSGML plan2ics//EN')
+        self.calendar.add('version', '1.0')
         self.timezone = PyICU.ICUtzinfo.default
-        tz = self.calendar.add('vtimezone')
-        tz.settzinfo(self.timezone)
+        self.calendar.add('vtimezone',self.timezone)
+        self.date_threshold = date_threshold
         if input:
             self._load(input)
 
@@ -86,10 +97,20 @@ class dayplan(object):
             fh = open(fh,mode='r')
         entries = re.split(r'(\d+/\d+/\d+\s+\d+:\d+:\d+)',fh.read())   # split the input file based on the lines that start with a date
         for event in zip(entries[1::2],entries[2::2]):      # now grab each event. That is the date, and the data after it
-            vevent = self.calendar.add('vevent')
-            self._load_event(vevent,event)
+            vevent = self._load_event(event)
+            if self.date_threshold:
+                vdtend = datetime.datetime.strptime(vevent['dtend'].ical()[0:8],"%Y%m%d")
+                dtdiff = datetime.datetime.now() - vdtend
+#                print "now %s minus dtend %s equals %s : threshold is %s\n" % (datetime.datetime.now(), vdtend, dtdiff, self.date_threshold)
+                if dtdiff < self.date_threshold:
+                    self.calendar.add_component(vevent)
+            else:
+                self.calendar.add_component(vevent)
 
-    def _load_event(self,vevent,event):
+
+    def _load_event(self,event):
+        vevent = Event()
+        vevent.add('uid',uid())
         dt = datetime_rx.match(event[0])
         dt_start = None
         dt_end = None
@@ -99,24 +120,25 @@ class dayplan(object):
             # there is no alarm trigger time
             # I will treat these as transparent, all-day events
             dt_start = datetime.datetime.strptime('%s' % dt.group('date'),'%m/%d/%Y').date()
-            vevent.add('dtstart').value = dt_start
+            vevent.add('dtstart',dt_start)
             dt_end = dt_start + one_day
-            vevent.add('transp').value = 'TRANSPARENT'
+            vevent.add('transp','TRANSPARENT')
         else:
             # we have a trigger time, and will use it for the end time until something better comes along
             dt_start = datetime.datetime.strptime('%s %s' % (dt.group('date'), time),'%m/%d/%Y %H:%M:%S')
             dt_start.replace(tzinfo = self.timezone)
-            vevent.add('dtstart').value = dt_start
-            vevent.add('transp').value = 'OPAQUE'
+            vevent.add('dtstart', dt_start)
+            vevent.add('transp','OPAQUE')
         description = []
-        rrule_set = None
+        rrlist = []
+        exdate = []
         for line in re.split(r'\n',event[1]):
             if not line:
                 continue
             if line[0] == 'N':
                 m = note_rx.match(line)
                 if m:
-                    vevent.add('summary').value = self._escape(m.group('message'))
+                    vevent.add('summary', self._escape(m.group('message')))
             elif line[0] == 'M':
                 m = message_rx.match(line)
                 if m:
@@ -124,13 +146,10 @@ class dayplan(object):
             elif line[0] == 'R':
                 m = repeat_rx.match(line)
                 if m:
-                    rrlist = []
                     repeat_days = None
-                    if not rrule_set:
-                        rrule_set = rruleset()
                     if not m.group('delete_secs') == '0':
                         dt_until = epoch + datetime.timedelta(seconds=int(m.group('delete_secs')))
-                        rrlist.append('UNTIL=%s' % dt_until)
+                        rrlist.append('UNTIL=%s' % vDate(dt_until).ical())
                     if not m.group('trigger_secs') == '0':
                         repeat_days = int(m.group('trigger_secs')) / 86400
                         rrlist.append('INTERVAL=%s' % repeat_days)
@@ -168,14 +187,11 @@ class dayplan(object):
                                 rrlist.append('BYDAY=%s' % ','.join(days))
                     else:
                         rrlist.append('FREQ=DAILY')
-                    rrule_set.rrule(rrulestr(';'.join(rrlist)))
-#                    print rrule_set
+#                    print ';'.join(rrlist)
             elif line[0] == 'E':
                 m = exception_rx.match(line)
                 if m:
-                    if not rrule_set:
-                        rrule_set = rruleset()
-                    rrule_set.exdate(datetime.datetime.strptime('%s' % m.group('date'),'%m/%d/%Y'))
+                    exdate.append(datetime.datetime.strptime('%s' % m.group('date'),'%m/%d/%Y'))
             elif line[0] == 'S':
                 continue
             elif line[0] == 'G':
@@ -187,20 +203,40 @@ class dayplan(object):
                     if duration:
                         dt_end = dt_start + duration
         if dt_end:
-            vevent.add('dtend').value = dt_end
+            vevent.add('dtend', dt_end)
         else:
-            vevent.add('dtend').value = dt_start            
+            vevent.add('dtend', dt_start)            
         if description:
-            vevent.add('description').value = ' '.join(description)
-        if rrule_set:
-            vevent.rruleset = rrule_set
+            vevent.add('description', ' '.join(description))
+        if rrlist:
+            vevent['rrule'] = ';'.join(rrlist)
+        if exdate:
+            vevent.add('exdate', ','.join(exdate))
+
+        return vevent
 
     def pprint(self):
-        return unicode(self.calendar.serialize().translate(translate_map),'utf-8')
+        return unicode(self.calendar.as_string().translate(translate_map),'utf-8')
     
 def main():
-    for file in sys.argv[1:]:
-        c = dayplan(file)
+    usage="usage: %prog [options] calendar [calendar2 calendar3...]"
+    optparser = optparse.OptionParser(usage=usage)
+    optparser.add_option('-v','--verbose',dest='verbose',
+        action="store_true",
+        default=False,
+        help='print info while running [default: %default]')        
+    optparser.add_option('-w','--weeks',dest='weeks',
+        default=None,
+        type="int",
+        help='include events since X weeks in the past.')
+
+    (opts,args) = optparser.parse_args()
+    date_threshold = None
+    if opts.weeks:
+        date_threshold = datetime.timedelta(weeks=opts.weeks)
+        
+    for file in args:
+        c = dayplan(file,date_threshold)
         print "%s" % c.pprint()
 
 if __name__ == '__main__':
