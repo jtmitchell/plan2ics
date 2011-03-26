@@ -68,12 +68,13 @@ translate_map = maketrans('\xa0',' ')
 class dayplan(object):
     calendar = None
     timezone = None
-    def __init__(self,input=None,date_threshold=None):
+    def __init__(self,input=None,date_threshold_delta=None):
         self.calendar = vobject.iCalendar()
         self.timezone = PyICU.ICUtzinfo.default
         tz = self.calendar.add('vtimezone')
         tz.settzinfo(self.timezone)
-        self.date_threshold = date_threshold
+        self.date_threshold_delta = date_threshold_delta
+        self.date_threshold = datetime.datetime.now() - date_threshold_delta
         if input:
             self._load(input)
 
@@ -95,18 +96,24 @@ class dayplan(object):
             vevent.add('uid').value = "%s-%s-%s" % (host_name,file_name,line_counter)
             line_counter += 1
             self._load_event(vevent,event)
-            if self.date_threshold:
+            if self.date_threshold_delta:
                 if vevent.rruleset:
                     """If this is a repeating event, and there is no valid date after the threshold date, remove the event."""
-                    if not vevent.rruleset.after(datetime.datetime.now() - self.date_threshold):
+                    if not vevent.rruleset.after(self.date_threshold):
                         self.calendar.remove(vevent)
                 else:
                     """Check if the end date is after the threshold date."""
                     vdtend = datetime.datetime.combine(vevent.dtend.value,datetime.time(0))
                     dtdiff = datetime.datetime.now() - vdtend
-                    if dtdiff > self.date_threshold:
+                    if dtdiff > self.date_threshold_delta:
                         # remove the event if it is too far in the past
                         self.calendar.remove(vevent)
+            # put all the datetimes into the current timezone - even if the object has been removed from the calendar.
+            if(isinstance(vevent.dtstart.value,datetime.datetime)):
+                vevent.dtstart.value = vevent.dtstart.value.replace(tzinfo=self.timezone)
+            if(isinstance(vevent.dtend.value,datetime.datetime)):
+                vevent.dtend.value = vevent.dtend.value.replace(tzinfo=self.timezone)
+            
 
     def _load_event(self,vevent,event):
         dt = datetime_rx.match(event[0])
@@ -124,7 +131,6 @@ class dayplan(object):
         else:
             # we have a trigger time, and will use it for the end time until something better comes along
             dt_start = datetime.datetime.strptime('%s %s' % (dt.group('date'), time),'%m/%d/%Y %H:%M:%S')
-            dt_start.replace(tzinfo = self.timezone)
             vevent.add('dtstart').value = dt_start
             vevent.add('transp').value = 'OPAQUE'
         description = []
@@ -230,12 +236,12 @@ def main():
         help='include events since X weeks in the past.')
 
     (opts,args) = optparser.parse_args()
-    date_threshold = None
+    date_threshold_delta = None
     if opts.weeks:
-        date_threshold = datetime.timedelta(weeks=opts.weeks)
+        date_threshold_delta = datetime.timedelta(weeks=opts.weeks)
         
     for file in args:
-        c = dayplan(file,date_threshold)
+        c = dayplan(file,date_threshold_delta)
         print "%s" % c.pprint()
 
 if __name__ == '__main__':
