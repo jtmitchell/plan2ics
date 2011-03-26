@@ -74,7 +74,8 @@ class dayplan(object):
         tz = self.calendar.add('vtimezone')
         tz.settzinfo(self.timezone)
         self.date_threshold_delta = date_threshold_delta
-        self.date_threshold = datetime.datetime.now() - date_threshold_delta
+	if date_threshold_delta:
+        	self.date_threshold = datetime.datetime.now() - date_threshold_delta
         if input:
             self._load(input)
 
@@ -93,7 +94,7 @@ class dayplan(object):
         host_name = os.uname()[1]
         for event in zip(entries[1::2],entries[2::2]):      # now grab each event. That is the date, and the data after it
             vevent = self.calendar.add('vevent')
-            vevent.add('uid').value = "%s-%s-%s" % (host_name,file_name,line_counter)
+            vevent.add('uid').value = "%s-%s@%s" % (file_name,line_counter,host_name)
             line_counter += 1
             self._load_event(vevent,event)
             if self.date_threshold_delta:
