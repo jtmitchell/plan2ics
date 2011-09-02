@@ -30,6 +30,7 @@ import os
 import optparse
 import vobject
 import datetime
+import uuid
 from dateutil.rrule import rruleset, rrulestr
 from string import maketrans
 
@@ -74,8 +75,8 @@ class dayplan(object):
         tz = self.calendar.add('vtimezone')
         tz.settzinfo(self.timezone)
         self.date_threshold_delta = date_threshold_delta
-	if date_threshold_delta:
-        	self.date_threshold = datetime.datetime.now() - date_threshold_delta
+        if date_threshold_delta:
+            self.date_threshold = datetime.datetime.now() - date_threshold_delta
         if input:
             self._load(input)
 
@@ -89,14 +90,12 @@ class dayplan(object):
         if isinstance(fh,str):
             fh = open(fh,mode='r')
         entries = re.split(r'(\d+/\d+/\d+\s+\d+:\d+:\d+)',fh.read())   # split the input file based on the lines that start with a date
-        line_counter = 1
         file_name = os.path.basename(fh.name)
         host_name = os.uname()[1]
         for event in zip(entries[1::2],entries[2::2]):      # now grab each event. That is the date, and the data after it
             vevent = self.calendar.add('vevent')
-            vevent.add('uid').value = "%s-%s@%s" % (file_name,line_counter,host_name)
-            line_counter += 1
-            self._load_event(vevent,event)
+            uid = self._load_event(vevent,event)
+            vevent.add('uid').value = "%s-%s@%s" % (file_name, uid, host_name)
             if self.date_threshold_delta:
                 if vevent.rruleset:
                     """If this is a repeating event, and there is no valid date after the threshold date, remove the event."""
@@ -220,6 +219,7 @@ class dayplan(object):
             vevent.add('description').value = ' '.join(description)
         if rrule_set:
             vevent.rruleset = rrule_set
+        return uuid.uuid3(uuid.NAMESPACE_OID, '%s %s' % (dt_start,' '.join(description)))
 
     def pprint(self):
         return unicode(self.calendar.serialize().translate(translate_map),'utf-8')
