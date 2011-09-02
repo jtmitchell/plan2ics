@@ -95,7 +95,7 @@ class dayplan(object):
         for event in zip(entries[1::2],entries[2::2]):      # now grab each event. That is the date, and the data after it
             vevent = self.calendar.add('vevent')
             uid = self._load_event(vevent,event)
-            vevent.add('uid').value = "%s-%s@%s" % (file_name, uid, host_name)
+            vevent.add('uid').value = "%s-%s-%s" % (file_name, uid, host_name)
             if self.date_threshold_delta:
                 if vevent.rruleset:
                     """If this is a repeating event, and there is no valid date after the threshold date, remove the event."""
