@@ -90,7 +90,7 @@ class Event(object):
     @property
     def plan(self):
         if self.pevent:
-            return "%s%s" % (' '.join(self.pevent),'\n'.join(self.extra))
+            return "%s%s\n" % (' '.join(self.pevent),'\n'.join(self.extra))
         else:
             return ''
 
