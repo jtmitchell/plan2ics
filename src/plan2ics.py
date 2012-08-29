@@ -36,13 +36,15 @@ from string import maketrans
 
 import PyICU
 
+import hashlib
+
 datetime_rx = re.compile(r'(?P<date>\d+/\d+/\d+)\s+(?P<time>\d+:\d+:\d+)')
 duration_rx = re.compile(r'\s+(?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d+)')
 exception_rx = re.compile(r'E\s+(?P<date>\d+/\d+/\d+)')
 repeat_rx = re.compile(r'R\s+(?P<trigger_secs>\d+)\s+(?P<delete_secs>\d+)\s+(?P<weekdaymap>\d+)\s+(?P<monthdaymap>\d+)\s+(?P<yearly>\d)')
 note_rx = re.compile(r'N\s+(?P<message>.*)$')
 message_rx = re.compile(r'M\s+(?P<message>.*)$')
-script_rx = re.compile(r'S\s+')
+script_rx = re.compile(r'S\s+#plan2ics:\s+version=(?P<version>\d+)\s+uuid=(?P<uid>[\w-]+)\s+hash=(?P<hash>\w+)')
 groupmtg_rx = re.compile(r'G\s+')
     
 epoch = datetime.date(1970,1,1)
@@ -66,57 +68,46 @@ weeknumber = (
 one_day = datetime.timedelta(days=1)
 translate_map = maketrans('\xa0',' ')
 
-class dayplan(object):
-    calendar = None
-    timezone = None
-    def __init__(self,input=None,date_threshold_delta=None):
-        self.calendar = vobject.iCalendar()
-        self.timezone = PyICU.ICUtzinfo.default
-        tz = self.calendar.add('vtimezone')
-        tz.settzinfo(self.timezone)
-        self.date_threshold_delta = date_threshold_delta
-        if date_threshold_delta:
-            self.date_threshold = datetime.datetime.now() - date_threshold_delta
-        if input:
-            self._load(input)
+class Event(object):
+    _uid = None
+    vevent = None   # ICS version of event
+    pevent = None   # array containing netplan version of event
+    extra = None
+    def __init__(self, vevent, event):
+        self.vevent = vevent
+        self.pevent = event
+        self.extra = []
+        self._load_plan()
+        
+    @property
+    def uid(self):
+        return str(self._uid)
+    
+    @property
+    def hash(self):
+        return hashlib.md5(self.pevent[0]).hexdigest()
 
-    def _escape(self,html):
-        """Returns the given HTML with ampersands, quotes and carets encoded."""
-        html = "".join([x for x in html if ord(x) < 128])
-#        return html.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
-        return html
+    @property
+    def plan(self):
+        if self.pevent:
+            return "%s%s" % ('\n'.join(self.pevent),'\n'.join(self.extra))
+        else:
+            return ''
 
-    def _load(self,fh):
-        if isinstance(fh,str):
-            fh = open(fh,mode='r')
-        entries = re.split(r'(\d+/\d+/\d+\s+\d+:\d+:\d+)',fh.read())   # split the input file based on the lines that start with a date
-        file_name = os.path.basename(fh.name)
-        host_name = os.uname()[1]
-        for event in zip(entries[1::2],entries[2::2]):      # now grab each event. That is the date, and the data after it
-            vevent = self.calendar.add('vevent')
-            uid = self._load_event(vevent,event)
-            vevent.add('uid').value = "%s-%s-%s" % (file_name, uid, host_name)
-            if self.date_threshold_delta:
-                if vevent.rruleset:
-                    """If this is a repeating event, and there is no valid date after the threshold date, remove the event."""
-                    if not vevent.rruleset.after(self.date_threshold):
-                        self.calendar.remove(vevent)
-                else:
-                    """Check if the end date is after the threshold date."""
-                    vdtend = datetime.datetime.combine(vevent.dtend.value,datetime.time(0))
-                    dtdiff = datetime.datetime.now() - vdtend
-                    if dtdiff > self.date_threshold_delta:
-                        # remove the event if it is too far in the past
-                        self.calendar.remove(vevent)
-            # put all the datetimes into the current timezone - even if the object has been removed from the calendar.
-            if(isinstance(vevent.dtstart.value,datetime.datetime)):
-                vevent.dtstart.value = vevent.dtstart.value.replace(tzinfo=self.timezone)
-            if(isinstance(vevent.dtend.value,datetime.datetime)):
-                vevent.dtend.value = vevent.dtend.value.replace(tzinfo=self.timezone)
-            
+    @property
+    def ics(self):
+        if self.vevent:
+            return self.vevent
+        else:
+            return ''
+        
+    def _escape(self,text):
+        """Returns the given text with everything above ASCII 128 removed."""
+        text = "".join([x for x in text if ord(x) < 128])
+        return text
 
-    def _load_event(self,vevent,event):
-        dt = datetime_rx.match(event[0])
+    def _load_plan(self):
+        dt = datetime_rx.match(self.pevent[0])
         dt_start = None
         dt_end = None
         dt_until = None
@@ -125,23 +116,23 @@ class dayplan(object):
             # there is no alarm trigger time
             # I will treat these as transparent, all-day events
             dt_start = datetime.datetime.strptime('%s' % dt.group('date'),'%m/%d/%Y').date()
-            vevent.add('dtstart').value = dt_start
+            self.vevent.add('dtstart').value = dt_start
             dt_end = dt_start + one_day
-            vevent.add('transp').value = 'TRANSPARENT'
+            self.vevent.add('transp').value = 'TRANSPARENT'
         else:
             # we have a trigger time, and will use it for the end time until something better comes along
             dt_start = datetime.datetime.strptime('%s %s' % (dt.group('date'), time),'%m/%d/%Y %H:%M:%S')
-            vevent.add('dtstart').value = dt_start
-            vevent.add('transp').value = 'OPAQUE'
+            self.vevent.add('dtstart').value = dt_start
+            self.vevent.add('transp').value = 'OPAQUE'
         description = []
         rrule_set = None
-        for line in re.split(r'\n',event[1]):
+        for line in re.split(r'\n',self.pevent[1]):
             if not line:
                 continue
             if line[0] == 'N':
                 m = note_rx.match(line)
                 if m:
-                    vevent.add('summary').value = self._escape(m.group('message'))
+                    self.vevent.add('summary').value = self._escape(m.group('message'))
             elif line[0] == 'M':
                 m = message_rx.match(line)
                 if m:
@@ -202,7 +193,9 @@ class dayplan(object):
                         rrule_set = rruleset()
                     rrule_set.exdate(datetime.datetime.strptime('%s' % m.group('date'),'%m/%d/%Y'))
             elif line[0] == 'S':
-                continue
+                s = script_rx.match(line)
+                if s:
+                    self._uid = s.group('uid')
             elif line[0] == 'G':
                 continue
             else:
@@ -212,15 +205,69 @@ class dayplan(object):
                     if duration:
                         dt_end = dt_start + duration
         if dt_end:
-            vevent.add('dtend').value = dt_end
+            self.vevent.add('dtend').value = dt_end
         else:
-            vevent.add('dtend').value = dt_start            
+            self.vevent.add('dtend').value = dt_start            
         if description:
-            vevent.add('description').value = ' '.join(description)
+            self.vevent.add('description').value = ' '.join(description)
         if rrule_set:
-            vevent.rruleset = rrule_set
-        return uuid.uuid3(uuid.NAMESPACE_OID, '%s %s' % (dt_start,' '.join(description)))
+            self.vevent.rruleset = rrule_set
+        if not self._uid:
+            # generate a UID and save it in the netplan data
+            self._uid = uuid.uuid3(uuid.NAMESPACE_OID, '%s %s' % (dt_start,' '.join(description)))
+            self.extra.append('S\t#plan2ics: version=%s uuid=%s hash=%s' % (0,self.uid,self.hash))
+        return
+        
 
+class dayplan(object):
+    calendar = None
+    timezone = None
+    events = None
+    def __init__(self,input=None,date_threshold_delta=None):
+        self.events = []
+        self.calendar = vobject.iCalendar()
+        self.timezone = PyICU.ICUtzinfo.default
+        tz = self.calendar.add('vtimezone')
+        tz.settzinfo(self.timezone)
+        self.date_threshold_delta = date_threshold_delta
+        if date_threshold_delta:
+            self.date_threshold = datetime.datetime.now() - date_threshold_delta
+        if input:
+            self._load(input)
+
+    def _load(self,filename):
+        with open(filename,mode='r') as fh:
+            entries = re.split(r'(\d+/\d+/\d+\s+\d+:\d+:\d+)',fh.read())   # split the input file based on the lines that start with a date
+            file_name = os.path.basename(fh.name)
+            host_name = os.uname()[1]
+            for plan_event in zip(entries[1::2],entries[2::2]):      # now grab each event. That is the date, and the data after it
+                vevent = self.calendar.add('vevent')
+                pevent = Event(vevent,plan_event)
+                vevent.add('uid').value = pevent.uid
+                self.events.append(pevent)
+                if self.date_threshold_delta:
+                    if vevent.rruleset:
+                        """If this is a repeating event, and there is no valid date after the threshold date, remove the event."""
+                        if not vevent.rruleset.after(self.date_threshold):
+                            self.calendar.remove(vevent)
+                    else:
+                        """Check if the end date is after the threshold date."""
+                        vdtend = datetime.datetime.combine(vevent.dtend.value,datetime.time(0))
+                        dtdiff = datetime.datetime.now() - vdtend
+                        if dtdiff > self.date_threshold_delta:
+                            # remove the event if it is too far in the past
+                            self.calendar.remove(vevent)
+                # put all the datetimes into the current timezone - even if the object has been removed from the calendar.
+                if(isinstance(vevent.dtstart.value,datetime.datetime)):
+                    vevent.dtstart.value = vevent.dtstart.value.replace(tzinfo=self.timezone)
+                if(isinstance(vevent.dtend.value,datetime.datetime)):
+                    vevent.dtend.value = vevent.dtend.value.replace(tzinfo=self.timezone)
+
+    def save_plan(self,filename):
+        with open(filename,mode='w+') as fh:
+            for event in self.events:
+                fh.write(event.plan)
+        
     def pprint(self):
         return unicode(self.calendar.serialize().translate(translate_map),'utf-8')
         
@@ -235,6 +282,10 @@ def main():
         default=None,
         type="int",
         help='include events since X weeks in the past.')
+    optparser.add_option('-s','--save',dest='do_save',
+        default=False,
+        action="store_true",
+        help='re-save the plan file after processing.')
 
     (opts,args) = optparser.parse_args()
     date_threshold_delta = None
@@ -244,6 +295,8 @@ def main():
     for file in args:
         c = dayplan(file,date_threshold_delta)
         print "%s" % c.pprint()
+        if opts.do_save:
+            c.save_plan(file)
 
 if __name__ == '__main__':
     main()
