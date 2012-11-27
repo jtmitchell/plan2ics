@@ -44,7 +44,7 @@ exception_rx = re.compile(r'E\s+(?P<date>\d+/\d+/\d+)')
 repeat_rx = re.compile(r'R\s+(?P<trigger_secs>\d+)\s+(?P<delete_secs>\d+)\s+(?P<weekdaymap>\d+)\s+(?P<monthdaymap>\d+)\s+(?P<yearly>\d)')
 note_rx = re.compile(r'N\s+(?P<message>.*)$')
 message_rx = re.compile(r'M\s+(?P<message>.*)$')
-script_rx = re.compile(r'S\s+#plan2ics:\s+version=(?P<version>\d+)\s+uuid=(?P<uid>[\w-]+)\s+hash=(?P<hash>\w+)\n*$')
+script_rx = re.compile(r'S\s+#plan2ics:\s+version=(?P<version>\d+)\s+uuid=(?P<uid>[\w-]+)\s+hash=(?P<hash>\w+)$')
 groupmtg_rx = re.compile(r'G\s+')
     
 epoch = datetime.date(1970,1,1)
