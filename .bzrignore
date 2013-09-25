@@ -4,3 +4,5 @@ sample/
 .project
 .pydevproject
 .settings
+*.nja
+.gitignore
