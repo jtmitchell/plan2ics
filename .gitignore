@@ -6,3 +6,5 @@ sample/
 .settings
 *.nja
 .bzrignore
+.venv
+*.pyc
