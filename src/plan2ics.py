@@ -77,10 +77,12 @@ class Event(object):
     vevent = None   # ICS version of event
     pevent = None   # array containing netplan version of event
     extra = None
+    verbose = False
 
-    def __init__(self, vevent, event):
+    def __init__(self, vevent, event, verbose=False):
         self.vevent = vevent
         self.pevent = event
+        self.verbose = verbose
         self.extra = []
         self._load_plan()
 
@@ -198,18 +200,19 @@ class Event(object):
                                 weeks.append(weeknumber[i - 8])
                         if weeks:
                             rrlist.append('FREQ=MONTHLY')
-                            daylist = ['%s%s' % (n, d) for n in weeks for d in days]
-                            if daylist:
-                                rrlist.append('BYDAY=%s' % ','.join(daylist))
+                            if days:
+                                rrlist.append('BYDAY=%s' % ','.join(days))
+                            if weeks:
+                                rrlist.append('BYSETPOS=%s' % ','.join(weeks))
                         else:
                             rrlist.append('FREQ=WEEKLY')
                             if days:
                                 rrlist.append('BYDAY=%s' % ','.join(days))
                     else:
                         rrlist.append('FREQ=DAILY')
-                    print "days %s rrlist %s" % ('', ';'.join(rrlist))
+                    if self.verbose:
+                        print "days %s rrlist %s" % ('', ';'.join(rrlist))
                     rrule_set.rrule(rrulestr(';'.join(rrlist)))
-                    #print rrule_set
             elif line[0] == 'E':
                 m = exception_rx.match(line)
                 if m:
@@ -243,6 +246,8 @@ class Event(object):
         if description:
             self.vevent.add('description').value = ' '.join(description)
         if rrule_set:
+            if self.verbose:
+                print "plan event %s" % (self.plan)
             self.vevent.rruleset = rrule_set
         if not self._uid:
             # generate a UID and save it in the netplan data
@@ -258,13 +263,15 @@ class dayplan(object):
     calendar = None
     timezone = None
     events = None
+    verbose = False
 
-    def __init__(self, input=None, date_threshold_delta=None):
+    def __init__(self, input=None, date_threshold_delta=None, verbose=False):
         self.events = []
         self.calendar = vobject.iCalendar()
         self.timezone = PyICU.ICUtzinfo.getDefault()
         tz = self.calendar.add('vtimezone')
         tz.settzinfo(self.timezone)
+        self.verbose = verbose
         self.date_threshold_delta = date_threshold_delta
         if date_threshold_delta:
             self.date_threshold = datetime.datetime.now(
@@ -279,7 +286,7 @@ class dayplan(object):
         # now grab each event. That is the date, and the data after it
         for plan_event in zip(entries[1::2], entries[2::2]):
             vevent = self.calendar.add('vevent')
-            pevent = Event(vevent, plan_event)
+            pevent = Event(vevent, plan_event, self.verbose)
             vevent.add('uid').value = pevent.uid
             self.events.append(pevent)
 
@@ -341,7 +348,7 @@ def main():
 
     for file in args:
         with open(file, mode='r') as fh:
-            c = dayplan(fh, date_threshold_delta)
+            c = dayplan(fh, date_threshold_delta, opts.verbose)
         print(("%s" % c.pprint()))
         if opts.do_save:
             with open(file, mode='w+') as fh:
